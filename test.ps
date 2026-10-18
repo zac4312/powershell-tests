@@ -108,7 +108,7 @@ do {
                                 $targetPid = [int]$killChoice
                                 Write-Host "[+] Attempting to terminate PID $targetPid on$selectedPC..." -ForegroundColor Yellow
                                 
-                                Invoke-Command -ComputerName $selectedPC -Credential$globalCreds -ScriptBlock {
+                                Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
                                     param($pidToKill)
                                     Stop-Process -Id $pidToKill -Force -ErrorAction Stop
                                     Write-Host "[+] Successfully killed process ID $pidToKill." -ForegroundColor Green
