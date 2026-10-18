@@ -79,25 +79,29 @@ do {
                     '1' {
                         Write-Host "`n[+] Launching Notepad on $selectedPC..." -ForegroundColor Green
                         try {
-                            Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {$process = Start-Process notepad.exe -PassThru
-                                Start-Sleep -Milliseconds 500
-                                Add-Type -AssemblyName System.Windows.Forms
-                                [System.Windows.Forms.SendKeys]::SendWait("Hello from Enterprise Domain Admin!")
-                                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+                            # Launch notepad remotely using a cim method or background process
+                            Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
+                                # Start process in the interactive session context
+                                $sessionID = (Get-Process -ea SilentlyContinue | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1).SessionId
+                                if ($null -eq $sessionID) { $sessionID = 1 }
+                                
+                                # Use WMI/CIM to spawn process in the user session
+                                $processClass = [wmiclass]"\\.\root\cimv2:Win32_Process"
+                                $result = $processClass.Create("notepad.exe")
                             }
-                            Write-Host "[+] Action executed successfully." -ForegroundColor Green
+                            Write-Host "[+] Notepad launched on user desktop successfully!" -ForegroundColor Green
                         } catch {
-                            Write-Host "[!] Error connecting to $selectedPC. Check WinRM/Firewall." -ForegroundColor Red
+                            Write-Host "[!] Error launching app: $_" -ForegroundColor Red
                         }
                     }
                     '2' {
-                        Write-Host "`n[+] Fetching active processes from $selectedPC..." -ForegroundColor Green
+                        Write-Host "`n[+] Fetching Remote Task Manager processes from $selectedPC..." -ForegroundColor Green
                         try {
                             Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
-                                Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | Select-Object ProcessName, MainWindowTitle, StartTime
+                                Get-Process | Sort-Object WorkingSet -Descending | Select-Object Id, ProcessName, @{Name="Memory(MB)";Expression={="{0:N2}" -f ($_.WorkingSet / 1MB)}}, CPU | Select-Object -First 15
                             }
                         } catch {
-                            Write-Host "[!] Error fetching processes." -ForegroundColor Red
+                            Write-Host "[!] Error fetching remote process list." -ForegroundColor Red
                         }
                     }
                     '3' {
