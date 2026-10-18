@@ -100,8 +100,22 @@ do {
                             Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
                                 Get-Process | Sort-Object WorkingSet -Descending | Select-Object Id, ProcessName, @{Name="Memory(MB)";Expression={="{0:N2}" -f ($_.WorkingSet / 1MB)}}, CPU | Select-Object -First 15
                             }
+                            
+                            Write-Host "`n------------------------------------------" -ForegroundColor Cyan
+                            $killChoice = Read-Host "Enter a Process ID (PID) to kill (or press Enter to skip)"
+                            
+                            if (-not [string]::IsNullOrWhiteSpace($killChoice)) {
+                                $targetPid = [int]$killChoice
+                                Write-Host "[+] Attempting to terminate PID $targetPid on$selectedPC..." -ForegroundColor Yellow
+                                
+                                Invoke-Command -ComputerName $selectedPC -Credential$globalCreds -ScriptBlock {
+                                    param($pidToKill)
+                                    Stop-Process -Id $pidToKill -Force -ErrorAction Stop
+                                    Write-Host "[+] Successfully killed process ID $pidToKill." -ForegroundColor Green
+                                } -ArgumentList $targetPid
+                            }
                         } catch {
-                            Write-Host "[!] Error fetching remote process list." -ForegroundColor Red
+                            Write-Host "[!] Error managing remote processes: $_" -ForegroundColor Red
                         }
                     }
                     '3' {
