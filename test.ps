@@ -89,14 +89,17 @@ do {
                             $killChoice = Read-Host "Enter a Process ID (PID) to kill (or press Enter to skip)"
                             
                             if (-not [string]::IsNullOrWhiteSpace($killChoice)) {
-                                $targetPid = [int]$killChoice
-                                Write-Host "[+] Attempting to terminate PID $targetPid on$selectedPC..." -ForegroundColor Yellow
-st                               
-                                Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
+                                $targetPid = 0
+                                if (-not [int]::TryParse($killChoice.Trim(), [ref]$targetPid) -or $targetPid -le 0) {
+                                    Write-Host "[!] Enter a valid positive process ID." -ForegroundColor Red
+                                } else {
+                                    Write-Host "[+] Attempting to terminate PID $targetPid on $selectedPC..." -ForegroundColor Yellow
+                                    Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
                                     param($pidToKill)
                                     Stop-Process -Id $pidToKill -Force -ErrorAction Stop
-                                    Write-Host "[+] Successfully killed process ID $pidToKill." -ForegroundColor Green
-                                } -ArgumentList $targetPid
+                                    } -ArgumentList $targetPid -ErrorAction Stop
+                                    Write-Host "[+] Successfully terminated process ID $targetPid on $selectedPC." -ForegroundColor Green
+                                }
                             }
                         } catch {
                             Write-Host "[!] Error managing remote processes: $_" -ForegroundColor Red
