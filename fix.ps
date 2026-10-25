@@ -1,0 +1,15 @@
+# Fix-Time.ps1 - Configure reliable external NTP on Domain Controller
+Write-Host "[*] Stopping Windows Time service..." -ForegroundColor Cyan
+Stop-Service w32time -Force
+
+Write-Host "[*] Configuring time sync source to time.windows.com..." -ForegroundColor Cyan
+w32tm /config /manualpeertime:"time.windows.com,0x9" /syncfromflags:manual /reliable:YES /update
+
+Write-Host "[*] Starting Windows Time service..." -ForegroundColor Cyan
+Start-Service w32time
+
+Write-Host "[*] Forcing time synchronization..." -ForegroundColor Cyan
+w32tm /resync /force
+
+Write-Host "[*] Current Time Status:" -ForegroundColor Green
+w32tm /query /status
