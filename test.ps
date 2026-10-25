@@ -9,12 +9,13 @@ do {
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Host " [1] Select Target Client PC & Run Actions"
     Write-Host " [2] View All Domain Computers"
-    Write-Host " [3] Exit"
+    Write-Host " [3] View All Domain Users"
+    Write-Host " [4] Exit"
     Write-Host "==========================================" -ForegroundColor Cyan
     
-    $mainChoice = Read-Host "Select an option (1-3)"
+    $mainChoice = Read-Host "Select an option (1-4)"
 
-    if ($mainChoice -eq '3') { break }
+    if ($mainChoice -eq '4') { break }
 
     switch ($mainChoice) {
         '1' {
@@ -65,36 +66,19 @@ do {
                 Write-Host "==========================================" -ForegroundColor Cyan
                 Write-Host "   TARGET: $selectedPC" -ForegroundColor Yellow
                 Write-Host "==========================================" -ForegroundColor Cyan
-                Write-Host " [1] Launch Notepad (Remote GUI)"
-                Write-Host " [2] Check Active Processes"
-                Write-Host " [3] Check Uptime & Last Boot"
-                Write-Host " [4] Back to Main Menu"
+                Write-Host " [1] Check Active Processes"
+                Write-Host " [2] Check Uptime & Last Boot"
+                Write-Host " [3] View Recent Failed Logons (Event 4625)"
+                Write-Host " [4] Check Local Disk Space"
+                Write-Host " [5] Back to Main Menu"
                 Write-Host "==========================================" -ForegroundColor Cyan
 
-                $actionChoice = Read-Host "Select an action (1-4)"
+                $actionChoice = Read-Host "Select an action (1-5)"
 
-                if ($actionChoice -eq '4') { break }
+                if ($actionChoice -eq '5') { break }
 
                 switch ($actionChoice) {
                     '1' {
-                        Write-Host "`n[+] Launching Notepad on $selectedPC..." -ForegroundColor Green
-                        try {
-                            # Launch notepad remotely using a cim method or background process
-                            Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
-                                # Start process in the interactive session context
-                                $sessionID = (Get-Process -ea SilentlyContinue | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1).SessionId
-                                if ($null -eq $sessionID) { $sessionID = 1 }
-                                
-                                # Use WMI/CIM to spawn process in the user session
-                                $processClass = [wmiclass]"\\.\root\cimv2:Win32_Process"
-                                $result = $processClass.Create("notepad.exe")
-                            }
-                            Write-Host "[+] Notepad launched on user desktop successfully!" -ForegroundColor Green
-                        } catch {
-                            Write-Host "[!] Error launching app: $_" -ForegroundColor Red
-                        }
-                    }
-                    '2' {
                         Write-Host "`n[+] Fetching Remote Task Manager processes from $selectedPC..." -ForegroundColor Green
                         try {
                             Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
@@ -107,7 +91,7 @@ do {
                             if (-not [string]::IsNullOrWhiteSpace($killChoice)) {
                                 $targetPid = [int]$killChoice
                                 Write-Host "[+] Attempting to terminate PID $targetPid on$selectedPC..." -ForegroundColor Yellow
-                                
+st                               
                                 Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {
                                     param($pidToKill)
                                     Stop-Process -Id $pidToKill -Force -ErrorAction Stop
@@ -118,7 +102,7 @@ do {
                             Write-Host "[!] Error managing remote processes: $_" -ForegroundColor Red
                         }
                     }
-                    '3' {
+                    '2' {
                         Write-Host "`n[+] Checking uptime for $selectedPC..." -ForegroundColor Green
                         try {
                             Invoke-Command -ComputerName $selectedPC -Credential $globalCreds -ScriptBlock {$os = Get-CimInstance Win32_OperatingSystem
@@ -135,18 +119,46 @@ do {
                             Write-Host "[!] Error fetching uptime." -ForegroundColor Red
                         }
                     }
+                    '3' {
+                        Write-Host "`n[+] Fetching recent failed logons from $selectedPC..." -ForegroundColor Green
+                        try {
+                            Get-WinEvent -ComputerName $selectedPC -Credential $globalCreds -FilterHashtable @{LogName='Security'; ID=4625} -MaxEvents 5 |
+                                Select-Object TimeCreated, Message
+                        } catch {
+                            Write-Host "[!] Error fetching failed logons: $_" -ForegroundColor Red
+                        }
+                    }
+                    '4' {
+                        Write-Host "`n[+] Checking local disk space on $selectedPC..." -ForegroundColor Green
+                        try {
+                            Get-CimInstance -ComputerName $selectedPC -ClassName Win32_LogicalDisk -Filter "DriveType=3" |
+                                Select-Object DeviceID,
+                                    @{Name="FreeSpace(GB)";Expression={"{0:N2}" -f ($_.FreeSpace / 1GB)}},
+                                    @{Name="TotalSize(GB)";Expression={"{0:N2}" -f ($_.Size / 1GB)}}
+                        } catch {
+                            Write-Host "[!] Error fetching disk space: $_" -ForegroundColor Red
+                        }
+                    }
                     default { Write-Host "`n[!] Invalid selection." -ForegroundColor Red }
                 }
 
                 Write-Host "`nPress any key to return to target menu..." -ForegroundColor DarkGray
                 $null =$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
-            } while ($actionChoice -ne '4')
+            } while ($actionChoice -ne '5')
         }
         '2' {
             Clear-Host
             Write-Host "`n[+] Querying Active Directory Domain Computers..." -ForegroundColor Green
             Get-ADComputer -Filter * -Properties Name, OperatingSystem, Enabled | Select-Object Name, OperatingSystem, Enabled
+            Write-Host "`nPress any key to return to main menu..." -ForegroundColor DarkGray
+            $null =$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        }
+        '3' {
+            Clear-Host
+            Write-Host "`n[+] Querying Active Directory Domain Users..." -ForegroundColor Green
+            Get-ADUser -Filter * -Properties Enabled, LastLogonDate |
+                Select-Object Name, SamAccountName, Enabled, LastLogonDate
             Write-Host "`nPress any key to return to main menu..." -ForegroundColor DarkGray
             $null =$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         }
